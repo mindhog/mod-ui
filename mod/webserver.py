@@ -2107,6 +2107,16 @@ def signal_device_firmware_updated():
     os.remove(UPDATE_CC_FIRMWARE_FILE)
     SESSION.signal_device_updated()
 
+def signal_boot_check():
+    with open("/root/boot-system-check", 'r') as fh:
+        countRead = fh.read().strip()
+        countNumb = int(countRead) if countRead else 0
+
+    with TextFileFlusher("/root/boot-system-check") as fh:
+        fh.write("%i\n" % (countNumb+1))
+
+    run_command(["hmi-reset"], lambda: IOLoop.instance().add_callback(self.reboot))
+
 def signal_upgrade_check():
     with open("/root/check-upgrade-system", 'r') as fh:
         countRead = fh.read().strip()
@@ -2124,7 +2134,10 @@ def signal_recv(sig, _=0):
         else:
             func = SESSION.signal_save
     elif sig == SIGUSR2:
-        if os.path.exists("/root/check-upgrade-system") and \
+        if os.path.exists("/root/boot-system-check") and \
+           os.path.exists("/etc/systemd/system/boot-system-check.service"):
+            func = signal_boot_check
+        elif os.path.exists("/root/check-upgrade-system") and \
            os.path.exists("/etc/systemd/system/upgrade-system-check.service"):
             func = signal_upgrade_check
         else:
@@ -2175,8 +2188,18 @@ def prepare(isModApp = False):
         elif not SESSION.host.connected:
             ioinstance.call_later(0.2, checkhost)
 
+    def checkboot():
+        if not SESSION.host.connected:
+            ioinstance.call_later(1, checkhost)
+            return
+        if not SESSION.hmi.initialized:
+            ioinstance.call_later(1, checkhost)
+            return
+        print("boot was sucessful")
+
     ioinstance = IOLoop.instance()
     ioinstance.add_callback(checkhost)
+    ioinstance.add_callback(checkboot)
 
 def start():
     IOLoop.instance().start()
