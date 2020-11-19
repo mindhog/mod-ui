@@ -2115,7 +2115,11 @@ def signal_boot_check():
     with TextFileFlusher("/root/boot-system-check") as fh:
         fh.write("%i\n" % (countNumb+1))
 
-    run_command(["hmi-reset"], lambda: IOLoop.instance().add_callback(self.reboot))
+    run_command(["hmi-reset"], signal_boot_check_step2)
+
+def signal_boot_check_step2():
+    os.sync()
+    run_command(["reboot"], None)
 
 def signal_upgrade_check():
     with open("/root/check-upgrade-system", 'r') as fh:
